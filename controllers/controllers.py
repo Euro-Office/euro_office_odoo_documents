@@ -19,7 +19,7 @@ from odoo.tools.translate import _
 
 from odoo.addons.documents.controllers.documents import ShareRoute
 from odoo.addons.euro_office_odoo.controllers.controllers import EuroOffice_Connector
-from odoo.addons.euro_office_odoo.utils import config_utils, file_utils, jwt_utils, url_utils
+from odoo.addons.euro_office_odoo.utils import config_utils, file_utils, json_utils, jwt_utils, url_utils
 
 _logger = logging.getLogger(__name__)
 _mobile_regex = r"android|avantgo|playbook|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od|ad)|iris|kindle|lge |maemo|midp|mmp|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\\/|plucker|pocket|psp|symbian|treo|up\\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino"  # noqa: E501
@@ -34,6 +34,7 @@ class EuroOfficeDocuments_Connector(http.Controller):
             _logger.info(f"Getting new file template {request.env.user.lang} {supported_format}")
 
             if url:
+                url_utils.validate_public_http_url(request.env, url)
                 response = requests.get(url, stream=True, timeout=30)
                 response.raise_for_status()
                 file_data = response.content
@@ -211,7 +212,7 @@ class EuroOfficeDocuments_Inherited_Connector(EuroOffice_Connector):
             "docTitle": filename,
             "docIcon": f"/euro_office_odoo/static/description/editor_icons/{document_type}.ico",
             "docApiJS": docserver_url + "web-apps/apps/api/documents/api.js",
-            "editorConfig": markupsafe.Markup(json.dumps(root_config)),
+            "editorConfig": markupsafe.Markup(json_utils.dump_for_inline_script(root_config)),
         }
 
     @http.route(
@@ -264,6 +265,7 @@ class EuroOfficeDocuments_Inherited_Connector(EuroOffice_Connector):
 
             if (status == 2) | (status == 3):  # mustsave, corrupted
                 file_url = url_utils.replace_public_url_to_internal(request.env, body.get("url"))
+                url_utils.validate_public_http_url(request.env, file_url, allow_odoo_base=True)
                 datas = base64.encodebytes(urlopen(file_url, timeout=120).read())
                 document = request.env["documents.document"].sudo().browse(int(attachment.res_id))
                 document.with_user(user).sudo().write(
